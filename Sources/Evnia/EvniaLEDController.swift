@@ -46,7 +46,6 @@ public struct RGBColor: Equatable, Sendable {
 public enum EvniaError: Error, CustomStringConvertible {
     case deviceOpenFailed(vendorID: UInt16, productID: UInt16, code: IOReturn)
     case invalidColorCount(expected: Int, actual: Int)
-    case captureDisableUnsupported
     case requestFailed(address: UInt16, code: IOReturn)
     case shortTransfer(address: UInt16, expected: Int, actual: Int)
 
@@ -56,8 +55,6 @@ public enum EvniaError: Error, CustomStringConvertible {
             return "Failed to open Evnia USB device \(hex(vendorID, width: 4)):\(hex(productID, width: 4)); IOReturn=\(hex(UInt32(bitPattern: code), width: 8))"
         case let .invalidColorCount(expected, actual):
             return "Expected exactly \(expected) colors, got \(actual)"
-        case .captureDisableUnsupported:
-            return "Disabling software capture is not reverse-engineered yet; the current USB path can enable and drive the LED frame, but not reliably hand control back to the monitor OSD"
         case let .requestFailed(address, code):
             return "USB control transfer failed at register \(hex(address, width: 4)); IOReturn=\(hex(UInt32(bitPattern: code), width: 8))"
         case let .shortTransfer(address, expected, actual):
@@ -75,7 +72,18 @@ public final class EvniaLEDController {
     private static let writeRequest: UInt8 = 0x80
     private static let timeoutMilliseconds: UInt32 = 2_000
     private static let controlBlockAddresses: [UInt16] = [0xE020, 0xE030]
+    private static let baselineControlRegionAddress: UInt16 = 0xE020
     private static let e100Address: UInt16 = 0xE100
+    private static let baselineControlRegion: [UInt8] = [
+        0x00, 0x01, 0x02, 0x00, 0x00, 0x05, 0x00, 0x00,
+        0x00, 0x02, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x02, 0x00, 0x00, 0x05, 0x00, 0x00,
+        0x00, 0x02, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    ]
 
     private var device: CEvniaUSBDeviceRef?
 
@@ -95,13 +103,13 @@ public final class EvniaLEDController {
     }
 
     public func setCaptureEnabled(_ enabled: Bool) throws {
-        guard enabled else {
-            throw EvniaError.captureDisableUnsupported
-        }
-
-        let block = Self.makeControlBlock(captureEnabled: enabled)
-        for address in Self.controlBlockAddresses {
-            try write(address: address, bytes: block)
+        if enabled {
+            let block = Self.makeControlBlock(captureEnabled: true)
+            for address in Self.controlBlockAddresses {
+                try write(address: address, bytes: block)
+            }
+        } else {
+            try write(address: Self.baselineControlRegionAddress, bytes: Self.baselineControlRegion)
         }
     }
 
@@ -114,12 +122,12 @@ public final class EvniaLEDController {
             throw EvniaError.invalidColorCount(expected: Self.ledCount, actual: colors.count)
         }
 
-        guard captureEnabled else {
-            throw EvniaError.captureDisableUnsupported
+        if captureEnabled {
+            try setCaptureEnabled(true)
+            try write(address: Self.e100Address, bytes: flatten(colors))
+        } else {
+            try setCaptureEnabled(false)
         }
-
-        try setCaptureEnabled(captureEnabled)
-        try write(address: Self.e100Address, bytes: flatten(colors))
     }
 
     private func write(address: UInt16, bytes: [UInt8]) throws {
