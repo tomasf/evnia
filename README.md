@@ -21,7 +21,7 @@ The current Swift API is intentionally small:
 ```swift
 let controller = try EvniaLEDController()
 try controller.setCaptureEnabled(true)
-try controller.setColors(colors)   // exactly 44 RGBColor values
+try controller.setColors(frame)    // LEDFrame owns exactly 44 slots
 try controller.setCaptureEnabled(false)
 ```
 
@@ -171,11 +171,13 @@ import Evnia
 
 let controller = try EvniaLEDController()
 
-let colors = Array(repeating: RGBColor(red: 255, green: 0, blue: 0),
-                   count: EvniaLEDController.ledCount)
+var frame = LEDFrame()
+for index in 0..<LEDFrame.ledCount {
+    frame[index] = RGBColor(red: 255, green: 0, blue: 0)
+}
 
 try controller.setCaptureEnabled(true)
-try controller.setColors(colors)
+try controller.setColors(frame)
 
 // later
 try controller.setCaptureEnabled(false)

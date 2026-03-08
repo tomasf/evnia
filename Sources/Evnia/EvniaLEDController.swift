@@ -39,11 +39,8 @@ public final class EvniaLEDController {
         }
     }
 
-    public func setColors(_ colors: [RGBColor]) throws {
-        guard colors.count == Self.ledCount else {
-            throw EvniaError.invalidColorCount(expected: Self.ledCount, actual: colors.count)
-        }
-        try write(address: Self.e100Address, bytes: flatten(colors))
+    public func setColors(_ frame: LEDFrame) throws {
+        try write(address: Self.e100Address, bytes: frame.bytes)
     }
 
     private func write(address: UInt16, bytes: [UInt8]) throws {
@@ -69,23 +66,8 @@ public final class EvniaLEDController {
     }
 }
 
-public struct RGBColor: Equatable, Sendable {
-    public var red: UInt8
-    public var green: UInt8
-    public var blue: UInt8
-
-    public init(red: UInt8, green: UInt8, blue: UInt8) {
-        self.red = red
-        self.green = green
-        self.blue = blue
-    }
-
-    public static let black = RGBColor(red: 0, green: 0, blue: 0)
-}
-
 public enum EvniaError: Error, CustomStringConvertible {
     case deviceOpenFailed(vendorID: UInt16, productID: UInt16, code: IOReturn)
-    case invalidColorCount(expected: Int, actual: Int)
     case requestFailed(address: UInt16, code: IOReturn)
     case shortTransfer(address: UInt16, expected: Int, actual: Int)
 
@@ -93,25 +75,12 @@ public enum EvniaError: Error, CustomStringConvertible {
         switch self {
         case let .deviceOpenFailed(vendorID, productID, code):
             return "Failed to open Evnia USB device \(hex(vendorID, width: 4)):\(hex(productID, width: 4)); IOReturn=\(hex(UInt32(bitPattern: code), width: 8))"
-        case let .invalidColorCount(expected, actual):
-            return "Expected exactly \(expected) colors, got \(actual)"
         case let .requestFailed(address, code):
             return "USB control transfer failed at register \(hex(address, width: 4)); IOReturn=\(hex(UInt32(bitPattern: code), width: 8))"
         case let .shortTransfer(address, expected, actual):
             return "Short USB write at register \(hex(address, width: 4)); expected \(expected) bytes, wrote \(actual)"
         }
     }
-}
-
-private func flatten(_ colors: [RGBColor]) -> [UInt8] {
-    var bytes: [UInt8] = []
-    bytes.reserveCapacity(colors.count * 3)
-    for color in colors {
-        bytes.append(color.red)
-        bytes.append(color.green)
-        bytes.append(color.blue)
-    }
-    return bytes
 }
 
 private func hex<T: BinaryInteger>(_ value: T, width: Int) -> String {
