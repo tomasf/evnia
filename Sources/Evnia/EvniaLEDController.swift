@@ -104,7 +104,7 @@ public final class EvniaLEDController {
 
     public func setCaptureEnabled(_ enabled: Bool) throws {
         if enabled {
-            let block = Self.makeControlBlock(captureEnabled: true)
+            let block = Self.makeCaptureControlBlock()
             for address in Self.controlBlockAddresses {
                 try write(address: address, bytes: block)
             }
@@ -114,20 +114,10 @@ public final class EvniaLEDController {
     }
 
     public func setColors(_ colors: [RGBColor]) throws {
-        try apply(captureEnabled: true, colors: colors)
-    }
-
-    public func apply(captureEnabled: Bool, colors: [RGBColor]) throws {
         guard colors.count == Self.ledCount else {
             throw EvniaError.invalidColorCount(expected: Self.ledCount, actual: colors.count)
         }
-
-        if captureEnabled {
-            try setCaptureEnabled(true)
-            try write(address: Self.e100Address, bytes: flatten(colors))
-        } else {
-            try setCaptureEnabled(false)
-        }
+        try write(address: Self.e100Address, bytes: flatten(colors))
     }
 
     private func write(address: UInt16, bytes: [UInt8]) throws {
@@ -160,17 +150,13 @@ public final class EvniaLEDController {
         }
     }
 
-    private static func makeControlBlock(captureEnabled: Bool) -> [UInt8] {
-        var block: [UInt8] = [
+    private static func makeCaptureControlBlock() -> [UInt8] {
+        [
             0x01, 0x00, 0x02, 0x04,
             0x00, 0x05, 0x00, 0x00,
             0x00, 0x02, 0xFF, 0x00,
             0x00, 0x00, 0x00, 0x01,
         ]
-
-        // This bit is treated as the current software-capture toggle.
-        block[15] = captureEnabled ? 0x01 : 0x00
-        return block
     }
 }
 
