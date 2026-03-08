@@ -19,16 +19,11 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "CEvniaUSB",
-            publicHeadersPath: "include",
+            name: "Evnia",
             linkerSettings: [
                 .linkedFramework("CoreFoundation"),
                 .linkedFramework("IOKit"),
             ]
-        ),
-        .target(
-            name: "Evnia",
-            dependencies: ["CEvniaUSB"]
         ),
         .executableTarget(
             name: "EvniaRainbowDemo",

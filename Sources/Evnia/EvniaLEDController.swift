@@ -1,67 +1,4 @@
-import CEvniaUSB
 import Foundation
-
-public struct RGBColor: Equatable, Sendable {
-    public var red: UInt8
-    public var green: UInt8
-    public var blue: UInt8
-
-    public init(red: UInt8, green: UInt8, blue: UInt8) {
-        self.red = red
-        self.green = green
-        self.blue = blue
-    }
-
-    public static let black = RGBColor(red: 0, green: 0, blue: 0)
-
-    public static func rainbow(count: Int) -> [RGBColor] {
-        guard count > 0 else { return [] }
-        return (0..<count).map { index in
-            let hue = UInt16((UInt32(index) * 1536) / UInt32(count))
-            return hueToRGB(hue)
-        }
-    }
-
-    private static func hueToRGB(_ hue: UInt16) -> RGBColor {
-        let segment = Int(hue / 256)
-        let step = UInt8(hue % 256)
-
-        switch segment {
-        case 0:
-            return RGBColor(red: 255, green: step, blue: 0)
-        case 1:
-            return RGBColor(red: 255 &- step, green: 255, blue: 0)
-        case 2:
-            return RGBColor(red: 0, green: 255, blue: step)
-        case 3:
-            return RGBColor(red: 0, green: 255 &- step, blue: 255)
-        case 4:
-            return RGBColor(red: step, green: 0, blue: 255)
-        default:
-            return RGBColor(red: 255, green: 0, blue: 255 &- step)
-        }
-    }
-}
-
-public enum EvniaError: Error, CustomStringConvertible {
-    case deviceOpenFailed(vendorID: UInt16, productID: UInt16, code: IOReturn)
-    case invalidColorCount(expected: Int, actual: Int)
-    case requestFailed(address: UInt16, code: IOReturn)
-    case shortTransfer(address: UInt16, expected: Int, actual: Int)
-
-    public var description: String {
-        switch self {
-        case let .deviceOpenFailed(vendorID, productID, code):
-            return "Failed to open Evnia USB device \(hex(vendorID, width: 4)):\(hex(productID, width: 4)); IOReturn=\(hex(UInt32(bitPattern: code), width: 8))"
-        case let .invalidColorCount(expected, actual):
-            return "Expected exactly \(expected) colors, got \(actual)"
-        case let .requestFailed(address, code):
-            return "USB control transfer failed at register \(hex(address, width: 4)); IOReturn=\(hex(UInt32(bitPattern: code), width: 8))"
-        case let .shortTransfer(address, expected, actual):
-            return "Short USB write at register \(hex(address, width: 4)); expected \(expected) bytes, wrote \(actual)"
-        }
-    }
-}
 
 public final class EvniaLEDController {
     public static let vendorID: UInt16 = 0x0CF2
@@ -85,21 +22,10 @@ public final class EvniaLEDController {
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     ]
 
-    private var device: CEvniaUSBDeviceRef?
+    private let device: USBDeviceInterface
 
     public init(vendorID: UInt16 = EvniaLEDController.vendorID, productID: UInt16 = EvniaLEDController.productID) throws {
-        var errorCode: IOReturn = kIOReturnSuccess
-        let opened = CEvniaUSBOpenDevice(vendorID, productID, &errorCode)
-        guard let opened else {
-            throw EvniaError.deviceOpenFailed(vendorID: vendorID, productID: productID, code: errorCode)
-        }
-        device = opened
-    }
-
-    deinit {
-        if let device {
-            CEvniaUSBCloseDevice(device)
-        }
+        self.device = try USBDeviceInterface(vendorID: vendorID, productID: productID)
     }
 
     public func setCaptureEnabled(_ enabled: Bool) throws {
@@ -121,33 +47,16 @@ public final class EvniaLEDController {
     }
 
     private func write(address: UInt16, bytes: [UInt8]) throws {
-        guard let device else {
-            throw EvniaError.deviceOpenFailed(vendorID: Self.vendorID, productID: Self.productID, code: kIOReturnNotOpen)
-        }
-
         var mutableBytes = bytes
-        let length = UInt16(mutableBytes.count)
-        var transferred: UInt16 = 0
-        let result = mutableBytes.withUnsafeMutableBytes { rawBuffer -> IOReturn in
-            CEvniaUSBControlTransfer(
-                device,
-                Self.requestTypeOut,
-                Self.writeRequest,
-                0,
-                address,
-                rawBuffer.baseAddress,
-                length,
-                Self.timeoutMilliseconds,
-                &transferred
-            )
-        }
-
-        guard result == kIOReturnSuccess else {
-            throw EvniaError.requestFailed(address: address, code: result)
-        }
-        guard Int(transferred) == bytes.count else {
-            throw EvniaError.shortTransfer(address: address, expected: bytes.count, actual: Int(transferred))
-        }
+        try device.controlTransfer(
+            bmRequestType: Self.requestTypeOut,
+            bRequest: Self.writeRequest,
+            wValue: 0,
+            wIndex: address,
+            bytes: &mutableBytes,
+            timeoutMilliseconds: Self.timeoutMilliseconds,
+            address: address
+        )
     }
 
     private static func makeCaptureControlBlock() -> [UInt8] {
@@ -157,6 +66,40 @@ public final class EvniaLEDController {
             0x00, 0x02, 0xFF, 0x00,
             0x00, 0x00, 0x00, 0x01,
         ]
+    }
+}
+
+public struct RGBColor: Equatable, Sendable {
+    public var red: UInt8
+    public var green: UInt8
+    public var blue: UInt8
+
+    public init(red: UInt8, green: UInt8, blue: UInt8) {
+        self.red = red
+        self.green = green
+        self.blue = blue
+    }
+
+    public static let black = RGBColor(red: 0, green: 0, blue: 0)
+}
+
+public enum EvniaError: Error, CustomStringConvertible {
+    case deviceOpenFailed(vendorID: UInt16, productID: UInt16, code: IOReturn)
+    case invalidColorCount(expected: Int, actual: Int)
+    case requestFailed(address: UInt16, code: IOReturn)
+    case shortTransfer(address: UInt16, expected: Int, actual: Int)
+
+    public var description: String {
+        switch self {
+        case let .deviceOpenFailed(vendorID, productID, code):
+            return "Failed to open Evnia USB device \(hex(vendorID, width: 4)):\(hex(productID, width: 4)); IOReturn=\(hex(UInt32(bitPattern: code), width: 8))"
+        case let .invalidColorCount(expected, actual):
+            return "Expected exactly \(expected) colors, got \(actual)"
+        case let .requestFailed(address, code):
+            return "USB control transfer failed at register \(hex(address, width: 4)); IOReturn=\(hex(UInt32(bitPattern: code), width: 8))"
+        case let .shortTransfer(address, expected, actual):
+            return "Short USB write at register \(hex(address, width: 4)); expected \(expected) bytes, wrote \(actual)"
+        }
     }
 }
 
@@ -173,6 +116,5 @@ private func flatten(_ colors: [RGBColor]) -> [UInt8] {
 
 private func hex<T: BinaryInteger>(_ value: T, width: Int) -> String {
     let rendered = String(value, radix: 16, uppercase: true)
-    let padded = String(repeating: "0", count: max(0, width - rendered.count)) + rendered
-    return "0x\(padded)"
+    return "0x" + String(repeating: "0", count: max(0, width - rendered.count)) + rendered
 }
