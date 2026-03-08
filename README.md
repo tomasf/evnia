@@ -117,8 +117,10 @@ The confirmed release path is not a one-byte toggle. The working release sequenc
 That is the sequence behind `setCaptureEnabled(false)`.
 
 ## LED Slot Mapping
+<img width="1501" height="541" alt="image" src="https://github.com/user-attachments/assets/b45425ff-d06d-4244-b01f-7d045305ba25" />
 
-The `E100` frame is ordered and directly rendered. The current physical mapping for the 49M2C8900 is:
+
+The `E100` frame is ordered and directly rendered. The current physical mapping for the 49M2C8900 is, as seen from the front:
 
 - `0..3`: right-side vertical LEDs, with `0` at the bottom and `3` at the top-right corner
 - `3..11`: top row on the right side of the center break
@@ -126,11 +128,6 @@ The `E100` frame is ordered and directly rendered. The current physical mapping 
 - `20..23`: left-side vertical LEDs, including the top-left corner overlap
 - `24..34`: upper diffused center column above the monitor mount
 - `35..43`: lower diffused center column below the mount
-
-Notes:
-- slot `0` is the furthest-right bottom LED
-- slot `43` is near the bottom end of the diffused center section
-- some boundary LEDs, especially around `20` and `23/24`, may behave a little strangely due to corner overlap or diffuser bleed
 
 ## Example Frame Write
 
