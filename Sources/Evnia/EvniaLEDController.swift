@@ -8,6 +8,7 @@ public final class EvniaLEDController {
     private static let requestTypeOut: UInt8 = 0x40
     private static let writeRequest: UInt8 = 0x80
     private static let timeoutMilliseconds: UInt32 = 2_000
+    private static let frameSettleTime: TimeInterval = 0.01
     private static let controlBlockAddresses: [UInt16] = [0xE020, 0xE030]
     private static let baselineControlRegionAddress: UInt16 = 0xE020
     private static let e100Address: UInt16 = 0xE100
@@ -23,6 +24,7 @@ public final class EvniaLEDController {
     ]
 
     private let device: USBDeviceInterface
+    private var lastFrameWriteDate: Date?
 
     public init(vendorID: UInt16 = EvniaLEDController.vendorID, productID: UInt16 = EvniaLEDController.productID) throws {
         self.device = try USBDeviceInterface(vendorID: vendorID, productID: productID)
@@ -35,12 +37,14 @@ public final class EvniaLEDController {
                 try write(address: address, bytes: block)
             }
         } else {
+            waitForFrameToSettleIfNeeded()
             try write(address: Self.baselineControlRegionAddress, bytes: Self.baselineControlRegion)
         }
     }
 
     public func setColors(_ frame: LEDFrame) throws {
         try write(address: Self.e100Address, bytes: frame.bytes)
+        lastFrameWriteDate = Date()
     }
 
     private func write(address: UInt16, bytes: [UInt8]) throws {
@@ -63,6 +67,16 @@ public final class EvniaLEDController {
             0x00, 0x02, 0xFF, 0x00,
             0x00, 0x00, 0x00, 0x01,
         ]
+    }
+
+    private func waitForFrameToSettleIfNeeded() {
+        guard let lastFrameWriteDate else { return }
+
+        let elapsed = Date().timeIntervalSince(lastFrameWriteDate)
+        let remaining = Self.frameSettleTime - elapsed
+        if remaining > 0 {
+            Thread.sleep(forTimeInterval: remaining)
+        }
     }
 }
 
