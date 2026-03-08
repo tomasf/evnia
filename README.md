@@ -28,6 +28,7 @@ try controller.setCaptureEnabled(false)
 ## Library Layout
 
 - `Sources/Evnia/EvniaLEDController.swift`: high-level API
+- `Sources/Evnia/LEDFrame.swift`: `RGBColor` and fixed-size `LEDFrame`
 - `Sources/Evnia/USBDeviceInterface.swift`: low-level USB control-transfer wrapper using `IOKit` and `IOKit.usb`
 - `Sources/EvniaRainbowDemo/main.swift`: demo executable
 
@@ -50,6 +51,8 @@ Write:
 - `wIndex = register address`
 
 This is the only confirmed useful namespace for this monitor on macOS.
+
+The current Swift library uses the write path directly. The read form is documented here because it was confirmed during reverse-engineering and is part of the same protocol family.
 
 Example:
 - write register `0xE100` -> `0x40 / 0x80 / 0x0000 / 0xE100`
@@ -172,8 +175,8 @@ import Evnia
 let controller = try EvniaLEDController()
 
 var frame = LEDFrame()
-for index in 0..<LEDFrame.ledCount {
-    frame[index] = RGBColor(red: 255, green: 0, blue: 0)
+for index in 0..<LEDFrame.count {
+    frame[index] = .red
 }
 
 try controller.setCaptureEnabled(true)
